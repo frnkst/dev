@@ -4,7 +4,7 @@ A Playstation 5 is pretty hard to get at the moment. I really wanted one and ask
 
 I checked https://www.mediamarkt.ch/ and saw that the have a handy text in the DOM, which I can use to determine when they are sold out. In case the text won't show up, I'll notify myself in Telegram.
 
-![alt text](ps5-not-available.png)
+![alt text](images/ps5-not-available.png)
 
 ### The bot
 
@@ -42,6 +42,6 @@ $ */5 * * * *  python3 /bytesonly/ps5-python.py
 
 Then sit back and wait:
 
-![alt text](ps5-available.png)
+![alt text](images/ps5-available.png)
 
 Good luck and happy shopping.
