@@ -61,13 +61,63 @@ This makes sense, because it needs to fetch the new config. But there is also a 
 
 A pac file has been invented by Netscape in 1996, so it's been around for a long, long time. It's just a JavaScript file, with a bunch of helper or utility functions that are available. A pac file contains the one function `FindProxyForURL`. Inside the function the helpers like `shExpMatch` and `isInNet` are available. For parsing a JS file you need a JavaScript Engine. Luckily the browser already has a JS engine. It fetches the file, parses it, evaluates the code and applies to rules for redirecting the traffic. But where do those helper function come from? Well, they are baked in the browser. They are only available in a small sandbox called `pac-sandbox` inside the JS engine. This is also the place where the pac file is being executed.
 
+We can see the implementation of the helper function shExpMatch in [Chromium](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/services/proxy_resolver/pac_js_library.h#116) and in [Spidermonkey](https://searchfox.org/mozilla-central/source/netwerk/base/ascii_pac_utils.js#72)
 
-## The end
+The implementation is the same:
 
-Cool, we have a working solution. What's not so cool is that there is no plausible explanation, why it behaves the way it does and not the way it actually should. But doing some research on PAC it seems like it's this fabulous, annoying world where you can never be sure what it does until you try it out. This quote from here seems to sum it up pretty well: https://www.reddit.com/r/sysadmin/comments/g78uhy/pulling_my_hair_out_with_pac_files/
+```js
+function shExpMatch(url, pattern) {
+  pattern = pattern.replace(/\./g, "\\.");
+  pattern = pattern.replace(/\*/g, ".*");
+  pattern = pattern.replace(/\?/g, ".");
+  var newRe = new RegExp("^" + pattern + "$");
+  return newRe.test(url);
+}
+```
 
+And what if a client doesn't bring its own JS engine already. Probably they use the [pacparser library](https://github.com/manugarg/pacparser). This one too needs a JS engine and the library already bundles Spidermonkey. So maybe that's what IntelliJ does, maybe they wrote their own implementation.
 
-> I have always struggled with this. It also doesn't help that certain browsers evaluate PAC files differently. Anyways, I've never found anything other than a syntax checker for PAC files. I've had to actually test them with live traffic to see how they behave.
+Whichever is the case, the most likely reason that it doesn't work is that there is a bug in IntelliJ shExpMatch implementation. Let's see if this is the case.
+
+## The bug
+
+The expression `shExpMatch(host, "*.github.com|*.example.com)` evaluates to `true` in Chrome, Firefox and Pacparser for host github.com and api.github.com. And it evaluates to `false` in IntelliJ. Finally we found the bug! Without the pipe | is all evaluates to true. It's the pipe that IntelliJ can't handle!
+
+The `shExpMatch` Function is [highly suspicious](https://stackoverflow.com/questions/36362748/exactly-what-kind-of-matching-does-shexpmatch-do):
+
+- findproxyforurl.com - "Will attempt to match hostname or URL to a specified shell expression"
+- Microsoft - "The shExpMatch(str, shexp) function returns true if str matches the shexp using shell expression patterns."
+- Mozilla "Currently, the patterns are shell expressions, not regular expressions."
+
+What the hell is a shell expression anyway? What kind of matching does it do?
+
+# The fix
+
+I need to circumvent the pipe. I could just write it like this:
+
+`if (shExpMatch(host, "*.github.com) || shExpMatch(host, "*.example.com)`
+
+But I want to stay away from shExpMatch for the rest of my life. So this seems a cleaner more stable solution:
+
+```js
+function FindProxyForUrl(url, host) {
+  PROXY = "PROXY company.proxy.com:8080";
+  
+  if  (dnsDomainIs(host, "github.com")) return PROXY;
+  if  (dnsDomainIs(host, "example.com")) return PROXY;
+  
+  return "DIRECT";
+}
+```
+
+## The takeaways
+
+Cool, I have a working solution and learned a ton along the way. My key takeaways are the following:
+
+- If a pac file is specified in the WIFI settings, it doesn't route any traffic per se yet. It's merely a place where client applications can look up the URL to fetch, parse and evaluate the file.
+- On macOS the pac file only works when it's hosted on a web-server. The local file with `file:///path-to-file/proxy.pac` has no effect.
+- In IntelliJ a pac file in UTF-8 only works [if it doesn't use BOM](https://www.jetbrains.com/help/idea/settings-http-proxy.html). One more trap alone the way.
+- In IntelliJ the shExpMatch Function breaks when there is a pipe (|) in the shell expression
 
 ## Continue here
 
@@ -75,43 +125,6 @@ Cool, we have a working solution. What's not so cool is that there is no plausib
 - Add links where appropriate
 - Add screenshots where neededed
 - File IntelliJ bug report
-
-
-
-
-
-
-
-
-
-
-
-
-## Or maybe it's just intelliJ?
-
-Observation 1: 
-- When I add the pac to wifi --> browser  respects it
-- In IntlliJ
-  --> Autodetect proxy settings --> nothing happends
-  --> Autodetect and add pac file --> still doesn't work
-
-Test it with the proxies
-
-
-
-
-
-
-Check if it's BOM.
-If the PAC file encoding is UTF-8 with BOM, it will not work. Make sure that the encoding is UTF-8 without BOM.
-
-  
-
-https://www.jetbrains.com/help/idea/settings-http-proxy.html
-
-
-If the PAC file encoding is UTF-8 with BOM, it will not work. Make sure that the encoding is UTF-8 without BOM.
-
 
 
 
