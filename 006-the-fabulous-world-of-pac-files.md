@@ -2,15 +2,15 @@
 
 ## Prelude
 
-This is the story of how I fell into the rabbit whole of proxy automatic configuration (or short PAC) files. My company lets me connect to their network by vpn. But we also use cloud services like Github. The enterprise Github is secured by a ip allow list, so it can only be accessed from legitimate devices. In our case that traffic coming from the outgoing forward proxy. The vpn somehow doesn't route all traffic through that proxy, so this needs to be configured on the client machine. So far so good, let's get started.
+This is the story of how I fell into the rabbit hole of proxy automatic configuration (or PAC) files. My company lets me connect to their network by VPN. But we also use cloud services like GitHub. The enterprise GitHub is secured by an IP allow list, so it can only be accessed from legitimate devices. In our case, that traffic comes from the outgoing forward proxy. The VPN somehow doesn't route all traffic through that proxy, so this needs to be configured on the client machine. So far so good, let's get started.
 
 ## The simple solution
 
-On macOS you can go to WI-FI Settings > Your wifi name > Proxies. Lets set the HTTP and HTTPS proxy to "proxy.company.ch" and the port to 8080. Now I can access Github without any issues. I can work and everything is fine, until I want to google something. Wait what? Google.com gives me an error. And so does pretty much the rest of the internet. I get a ERR_TUNNEL_CONNECTION_FAILED. Looks like the vpn can't resolve any other hostnames than github.com and a few other ones. Probably this was configured by hand or there is no proper dns resolver configured? I'll probably never know. If there would only be a way to tell the system to use the proxy only for certain domains. Enter the world of PAC files.
+On macOS, you can go to Wi-Fi Settings > Your Wi-Fi name > Proxies. Let's set the HTTP and HTTPS proxy to "proxy.company.ch" and the port to 8080. Now I can access GitHub without any issues. I can work and everything is fine, until I want to google something. Wait, what? Google.com gives me an error. And so does pretty much the rest of the internet. I get an ERR_TUNNEL_CONNECTION_FAILED. It looks like the VPN can't resolve any other hostnames than github.com and a few others. Probably this was configured by hand, or there is no proper DNS resolver configured? I'll probably never know. If there were only a way to tell the system to use the proxy only for certain domains. Enter the world of PAC files.
 
 ## The PAC file
 
-Luckily the company is hosting a PAC file. The Proxy auto-config file defined how web browsers and other user agents can automatically choose the appropriate proxy server for fetching a given URL. The file contains the JavaScript function `FindProxyForUrl(url, host)`, which returns a string with one or more access methods.
+Luckily, the company is hosting a PAC file. The Proxy Auto-Config file defines how web browsers and other user agents can automatically choose the appropriate proxy server for fetching a given URL. The file contains the JavaScript function FindProxyForUrl(url, host), which returns a string with one or more access methods.
 
 Let's look at the file that my company provides:
 
@@ -29,15 +29,17 @@ function FindProxyForURL(url, host) {
 
 Cool. Send traffic to github.com and other important domains through the proxy and everything else not.
 
-Let's just use that file. Go to WI-FI Settings > Your wifi name > Proxies. Turn automatic proxy configuration on and set the URL to https://company.com/proxy.pac or whatever the link to the pac file is. As soon as you click ok the file is loaded from the server. However, in the browser everything is like before. That's because the browser loads the pac file on startup. So let's close the browser and open it again. Cool Github.com works and so does the rest of the internet. All fixed, let's get to work. I use IntelliJ and there is this neat feature to see Github Pull Requests in the IDE. But wait, it's not working. Let's go to the IntelliJ Settings > Proxy and activate "Auto-detect proxy settings". It still doesn't work. Maybe I also need to specify the PAC file location explicitly: Click on "Automatic proxy configuration URL" and set the URL there. Maybe the IDE just needs a restart. Still nothing. What domains does the PR plugin connect to? I start a local intercepting proxy and point IntelliJ there, so I can analyse the traffic. It sends some POST requests to https://api.gitbhub.com/graphql.
+Let's just use that file. Go to Wi-Fi Settings > Your Wi-Fi name > Proxies. Turn automatic proxy configuration on and set the URL to https://company.com/proxy.pac or whatever the link to the PAC file is. As soon as you click OK, the file is loaded from the server. However, in the browser, everything is like before. That's because the browser loads the PAC file on startup. So let's close the browser and open it again. Cool. GitHub.com works and so does the rest of the internet. All fixed, let's get to work. I use IntelliJ, and there is this neat feature to see GitHub pull requests in the IDE. But wait, it's not working. Let's go to the IntelliJ Settings > Proxy and activate "Auto-detect proxy settings." It still doesn't work. Maybe I also need to specify the PAC file location explicitly: click on "Automatic proxy configuration URL" and set the URL there. Maybe the IDE just needs a restart. Still nothing. What domains does the PR plugin connect to? I start a local intercepting proxy and point IntelliJ there, so I can analyze the traffic. It sends some POST requests to https://api.github.com/graphql.
 
-Isn't that strange? `api.github.com/graphql` should definitely match `*github.com`. Let's verify this online [with a pac file tester](https://thorsen.pm/proxyforurl). The url `http://api.github.com/graphql` returns PROXY and so does `http://github.com`. Let's try it also [on this page](https://pactester.online/) for good measure. Same. How come IntelliJ is not sending this traffic to the proxy, but the browser is?
+Isn't that strange? api.github.com/graphql should definitely match *.github.com. Let's verify this online [with a PAC file tester](https://thorsen.pm/proxyforurl). The URL http://api.github.com/graphql returns PROXY, and so does http://github.com. Let's try it also [on this page](https://pactester.online/) for good measure. Same. How come IntelliJ is not sending this traffic to the proxy, but the browser is?
 
-I fire up a transparent proxy, so I can do a man-in-the-middle and analyze the requests and responses in detail: `mitmproxy -p 9001 --mode upstream:http://company.proxy.com:8080`. There are a couple of requests being made, all of them go to api.github.com. And guess what: The feature itself now works in IntelliJ. So it's not really the proxy behaving weird and it must have something to do with the pac handling in IntelliJ. So I create my own pac file I can play around with.
+I fire up a transparent proxy so I can do a man-in-the-middle and analyze the requests and responses in detail: `mitmproxy -p 9001 --mode upstream:http://company.proxy.com:8080`. There are a couple of requests being made, all of them go to api.github.com .And guess what: The feature itself now works in IntelliJ. So it's not really the proxy behaving weird, and it must have something to do with the PAC handling in IntelliJ. So I create my own PAC file I can play around with.
+
+
 
 ## What the PAC!
 
-Let's try to find a pac configuration that works for my use-case. There are rumors that you can use a local pac file, so I add `file:///Users/myuser/proxy.pac` in the wifi settings and make a simple config to redirect all traffic to mitmproxy:
+Let's try to find a pac configuration that works for my use-case. There are rumors that you can use a local pac file, so I add `file:///Users/myuser/proxy.pac` in the WIFI settings and make a simple config to redirect all traffic to mitmproxy:
 
 ```js
 function FindProxyForURL(url, host) {
@@ -45,11 +47,11 @@ function FindProxyForURL(url, host) {
 }
 ```
 
-That doesn't so anything. My experience is the same as these guys had [here](https://serverfault.com/questions/957519/why-does-file-users-username-library-proxy-pac-not-work-in-macos). And [this discussion](https://discussions.apple.com/thread/251395256?sortBy=rank) never got an answer but 150 upvotes. Then I host my own pac file on a server.
+That doesn't so anything. My experience is the same as these guys had [here](https://serverfault.com/questions/957519/why-does-file-users-username-library-proxy-pac-not-work-in-macos). And [this discussion](https://discussions.apple.com/thread/251395256?sortBy=rank) never got an answer but 150 up votes. Then I host my own PAC file on a server.
 
 ## The hosted PAC
 
-I use the same pac file and start a webserver in that directory: `python3 -m http.server 9001 --bind 127.0.0.1`
+I use the same PAC file and start a webserver in that directory: `python3 -m http.server 9001 --bind 127.0.0.1`
 
 Then I set the PAC config to the hosted file: `http://localhost:9001/proxy.pac`. Now that I have a solution, that actually works, I can play around with the config.
 
@@ -57,9 +59,9 @@ I immediately notice that there are a bunch of requests as soon as I click ok:
 
 ![alt text](images/initial.png)
 
-This makes sense, because it needs to fetch the new config. But there is also a request as soon as I open Chrome or IntelliJ. Why is that? I thought that the network interface somehow routes the traffic to the correct location, but that's not how it works. When I specify a pac file in the WIFI settings AND I configure a client application to use the system settings, then the client application gets, parses and evaluates the pac file itself.
+This makes sense because it needs to fetch the new config. But there is also a request as soon as I open Chrome or IntelliJ. Why is that? I thought that the network interface somehow routes the traffic to the correct location, but that's not how it works. When I specify a PAC file in the Wi-Fi settings AND configure a client application to use the system settings, then the client application gets, parses, and evaluates the PAC file itself.
 
-A pac file has been invented by Netscape in 1996, so it's been around for a long, long time. It's just a JavaScript file, with a bunch of helper or utility functions that are available. A pac file contains the one function `FindProxyForURL`. Inside the function the helpers like `shExpMatch` and `isInNet` are available. For parsing a JS file you need a JavaScript Engine. Luckily the browser already has a JS engine. It fetches the file, parses it, evaluates the code and applies to rules for redirecting the traffic. But where do those helper function come from? Well, they are baked in the browser. They are only available in a small sandbox called `pac-sandbox` inside the JS engine. This is also the place where the pac file is being executed.
+A PAC file was invented by Netscape in 1996, so it's been around for a long, long time. It's just a JavaScript file with a bunch of helper or utility functions that are available. A PAC file contains the one function FindProxyForURL. Inside the function, helpers like shExpMatch and isInNet are available. For parsing a JS file, you need a JavaScript engine. Luckily, the browser already has a JS engine. It fetches the file, parses it, evaluates the code, and applies the rules for redirecting the traffic. But where do those helper functions come from? Well, they are baked into the browser. They are only available in a small sandbox called pac-sandbox inside the JS engine. This is also the place where the PAC file is executed.
 
 We can see the implementation of the helper function shExpMatch in [Chromium](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/services/proxy_resolver/pac_js_library.h#116) and in [Spidermonkey](https://searchfox.org/mozilla-central/source/netwerk/base/ascii_pac_utils.js#72)
 
@@ -74,14 +76,14 @@ function shExpMatch(url, pattern) {
   return newRe.test(url);
 }
 ```
-We can see that this implementation can handle the pipe. Let verify it to be sure:
+We can see that this implementation can handle the pipe. Let verify this to be sure:
 
 ```js
 console.log(shExpMatch("http:test.example1.com", "*.example1.com|*.example2.com")) // ==> true
 ```
 
 
-And what if a client doesn't bring its own JS engine already. Probably they use the [pacparser library](https://github.com/manugarg/pacparser). This one too needs a JS engine and the library already bundles Spidermonkey. So maybe that's what IntelliJ does, maybe they wrote their own implementation.
+And what if a client doesn't bring its own JS engine already? Probably they use the [pacparser library](https://github.com/manugarg/pacparser). This one too needs a JS engine and the library already bundles Spidermonkey. So maybe that's what IntelliJ does, maybe they wrote their own implementation.
 
 Whichever is the case, the most likely reason that it doesn't work is that there is a bug in IntelliJ shExpMatch implementation. Let's see if this is the case.
 
