@@ -74,6 +74,12 @@ function shExpMatch(url, pattern) {
   return newRe.test(url);
 }
 ```
+We can see that this implementation can handle the pipe. Let verify it to be sure:
+
+```js
+console.log(shExpMatch("http:test.example1.com", "*.example1.com|*.example2.com")) // ==> true
+```
+
 
 And what if a client doesn't bring its own JS engine already. Probably they use the [pacparser library](https://github.com/manugarg/pacparser). This one too needs a JS engine and the library already bundles Spidermonkey. So maybe that's what IntelliJ does, maybe they wrote their own implementation.
 
@@ -81,7 +87,7 @@ Whichever is the case, the most likely reason that it doesn't work is that there
 
 ## The bug
 
-The expression `shExpMatch(host, "*.github.com|*.example.com)` evaluates to `true` in Chrome, Firefox and Pacparser for host github.com and api.github.com. And it evaluates to `false` in IntelliJ. Finally we found the bug! Without the pipe | is all evaluates to true. It's the pipe that IntelliJ can't handle!
+The expression `shExpMatch(host, "*.github.com|*.example.com)` evaluates to `true` in Chrome, Firefox and Pacparser for host github.com and api.github.com. And it evaluates to `false` in IntelliJ. [Finally, we found the bug](https://youtrack.jetbrains.com/issue/IDEA-364083/Proxy-implementation-cant-deal-with-pipe-in-shExpMatch-function-of-a-PAC-file) Without the pipe | is all evaluates to true. It's the pipe that IntelliJ can't handle!
 
 The `shExpMatch` Function is [highly suspicious](https://stackoverflow.com/questions/36362748/exactly-what-kind-of-matching-does-shexpmatch-do):
 
@@ -117,19 +123,4 @@ Cool, I have a working solution and learned a ton along the way. My key takeaway
 - If a pac file is specified in the WIFI settings, it doesn't route any traffic per se yet. It's merely a place where client applications can look up the URL to fetch, parse and evaluate the file.
 - On macOS the pac file only works when it's hosted on a web-server. The local file with `file:///path-to-file/proxy.pac` has no effect.
 - In IntelliJ a pac file in UTF-8 only works [if it doesn't use BOM](https://www.jetbrains.com/help/idea/settings-http-proxy.html). One more trap alone the way.
-- In IntelliJ the shExpMatch Function breaks when there is a pipe (|) in the shell expression
-
-## Continue here
-
-- TODO  fix wording
-- Add links where appropriate
-- Add screenshots where neededed
-- File IntelliJ bug report
-
-
-
-
-
-
-
-
+- In IntelliJ the shExpMatch Function breaks when there is a pipe (|) in the shell expression 
